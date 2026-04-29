@@ -5,7 +5,7 @@ from requests.adapters import HTTPAdapter
 import zipfile
 
 BASE = "https://mtgjson.com/api/v5/"
-DATASETS = ("AllPrintings.json", "AllPricesToday.json")
+DATASETS = ("AllPrintings.json", "AllPrices.json")
 OUT_DIR = "./datasets"
 CHUNK_SIZE = 1 << 20  # 1 MiB
 
