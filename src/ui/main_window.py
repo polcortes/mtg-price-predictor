@@ -4,10 +4,13 @@ from tkinter.filedialog import askopenfilename
 from PIL import Image, ImageTk
 from pymongo import MongoClient
 from random import randint
+import threading
 
 from src.model.consumer import AIConsumer
+from src.scanner.escaner_cartas import scan_card
 from src.ocr.ocr_service import OCRService
 from pathlib import Path
+import cv2
 
 assets_path = Path(__file__).parent / "assets"
 
@@ -44,7 +47,7 @@ class MainWindow(tk.Tk):
 
         btn1_label = ttk.Label(left_frame, text="Escanea una carta")
         btn1_label.pack()
-        btn1 = ttk.Button(left_frame, image=self.camera_img)
+        btn1 = ttk.Button(left_frame, image=self.camera_img, command=self.start_card_scanner)
         btn1.pack(fill="x", pady=5)
 
         separator = ttk.Separator(left_frame, orient='horizontal')
@@ -90,6 +93,15 @@ class MainWindow(tk.Tk):
         self.result_label = ttk.Label(self.right_frame, text="")
         self.result_label.grid(row=4, column=0, columnspan=2, pady=10)
 
+    def start_card_scanner(self):
+        """Inicia el escáner de cartas en un thread separado."""
+        def run_scanner():
+            card_path = scan_card()
+            if card_path:
+                self.show_image_preview(card_path)
+
+        thread = threading.Thread(target=run_scanner, daemon=True)
+        thread.start()
     def on_image_selected(self):
         image_path = askopenfilename(title="Selecciona una imagen", filetypes=[("Image files", "*.jpg *.jpeg *.png")])
         if not image_path:
