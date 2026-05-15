@@ -4,8 +4,10 @@ from tkinter.filedialog import askopenfilename
 from PIL import Image, ImageTk
 from pymongo import MongoClient
 from random import randint
+import threading
 
 from src.model.consumer import AIConsumer
+from src.scanner.escaner_cartas import CardScanner
 from pathlib import Path
 
 assets_path = Path(__file__).parent / "assets"
@@ -42,7 +44,7 @@ class MainWindow(tk.Tk):
 
         btn1_label = ttk.Label(left_frame, text="Escanea una carta")
         btn1_label.pack()
-        btn1 = ttk.Button(left_frame, image=self.camera_img)
+        btn1 = ttk.Button(left_frame, image=self.camera_img, command=self.start_card_scanner)
         btn1.pack(fill="x", pady=5)
 
         separator = ttk.Separator(left_frame, orient='horizontal')
@@ -89,6 +91,33 @@ class MainWindow(tk.Tk):
         # Etiqueta para mostrar los resultados de la IA, que faltaba añadir visualmente
         self.result_label = ttk.Label(self.right_frame, text="")
         self.result_label.grid(row=4, column=0, columnspan=2, pady=10)
+
+    def start_card_scanner(self):
+        """Inicia el escáner de cartas en un thread separado."""
+        def run_scanner():
+            scanner = CardScanner()
+            scanner.start_scanning()
+            if scanner.get_last_card() is not None:
+                card_image = scanner.get_last_card()
+                self.show_card_from_scanner(card_image)
+
+        thread = threading.Thread(target=run_scanner, daemon=True)
+        thread.start()
+
+    def show_card_from_scanner(self, card_image):
+        """Muestra la carta escaneada en el preview."""
+        try:
+            from PIL import Image
+            import cv2
+
+            rgb_image = cv2.cvtColor(card_image, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(rgb_image)
+            img.thumbnail((150, 200), Image.Resampling.LANCZOS)
+            preview_photo = ImageTk.PhotoImage(img)
+            self.preview_label.config(image=preview_photo, text="")
+            self.preview_label.image = preview_photo
+        except Exception as e:
+            self.preview_label.config(text=f"Error: {str(e)}")
 
     def show_image_preview(self, image_path):
         if not image_path:
