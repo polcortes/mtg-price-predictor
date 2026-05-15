@@ -63,7 +63,9 @@ def clean_name(text: str) -> str:
 
     # Quitar palabras basura frecuentes del OCR
     junk_words = {
-        "ee", "ele", "le", "de", "i", "l", "a", "e", "el", "la", "lo"
+        "j", "i", "l", "e", "el", "ell", "lee", "lea", "see",
+        "ns", "my", "je", "se", "s", "ef", "dy", "do", "elit",
+        "ee", "ele", "le", "de", "a", "la", "lo"
     }
     words = text.split()
     while words and words[-1].lower() in junk_words:
@@ -171,12 +173,14 @@ def ocr_image(image_path: str) -> str:
         return ""
 
     try:
-        # Una sola línea
-        config = "--oem 3 --psm 7"
+        config = (
+            "--oem 3 --psm 7 "
+            "-c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-' "
+        )
 
         text = pytesseract.image_to_string(
             image_path,
-            lang="eng+spa",
+            lang="eng",
             config=config
         )
 
