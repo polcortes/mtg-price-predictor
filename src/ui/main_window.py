@@ -8,6 +8,7 @@ import threading
 
 from src.model.consumer import AIConsumer
 from src.scanner.escaner_cartas import scan_card
+from src.ocr.ocr_service import OCRService
 from pathlib import Path
 import cv2
 
@@ -16,18 +17,19 @@ assets_path = Path(__file__).parent / "assets"
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
-        
+
         self.title("Magic the Gathering: Price Predictor")
         self.geometry("400x429")
         self.minsize(400, 429)
-        
+
         self.current_card = None
-        
+
         # Conexión principal de los servicios (se inicializan al arrancar la ventana y no al importar)
         self.client = MongoClient("localhost", 27017)
         self.collection = self.client["mtg_data"]["card_price"]
         self.consumer = AIConsumer()
-        
+        self.ocr_service = OCRService()
+
         self._build_ui()
         
     def _build_ui(self):
@@ -61,9 +63,7 @@ class MainWindow(tk.Tk):
         self.preview_label = ttk.Label(left_frame, text="Preview", relief="sunken")
         self.preview_label.pack(fill="both", expand=True, pady=(10, 0))
 
-        btn2.config(command=lambda: self.show_image_preview(
-            askopenfilename(title="Selecciona una imagen", filetypes=[("Image files", "*.jpg *.jpeg *.png")])
-        ))
+        btn2.config(command=self.on_image_selected)
 
         self.right_frame = ttk.LabelFrame(
             main_frame, 
@@ -102,6 +102,13 @@ class MainWindow(tk.Tk):
 
         thread = threading.Thread(target=run_scanner, daemon=True)
         thread.start()
+    def on_image_selected(self):
+        image_path = askopenfilename(title="Selecciona una imagen", filetypes=[("Image files", "*.jpg *.jpeg *.png")])
+        if not image_path:
+            return
+
+        self.show_image_preview(image_path)
+        self.extract_card_from_image(image_path)
 
     def show_image_preview(self, image_path):
         if not image_path:
@@ -114,6 +121,28 @@ class MainWindow(tk.Tk):
             self.preview_label.image = preview_photo
         except Exception as e:
             self.preview_label.config(text=f"Error: {str(e)}")
+
+    def extract_card_from_image(self, image_path):
+        """Extrae nombre de carta desde imagen usando OCR."""
+        try:
+            result = self.ocr_service.extract_card_name(image_path)
+
+            if result:
+                card_name = result.get("ocr_name")
+                candidates = result.get("ocr_candidates", [])
+
+                self.entry_nombre.delete(0, tk.END)
+                self.entry_nombre.insert(0, card_name)
+
+                self.result_label.config(
+                    text=f"OCR: {card_name}\nCandidatos: {', '.join(candidates[:2])}",
+                    foreground="#0066cc"
+                )
+            else:
+                self.result_label.config(text="Error: No se pudo extraer el nombre", foreground="red")
+
+        except Exception as e:
+            self.result_label.config(text=f"Error OCR: {str(e)}", foreground="red")
 
     def predict_price(self):
         """Obtiene carta aleatoria y predice su precio."""
