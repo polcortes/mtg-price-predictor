@@ -72,7 +72,7 @@ class CardScanner:
             print("No veo ninguna carta para guardar...")
             return None
 
-    def start_scanning(self):
+    def start_scanning(self) -> Optional[str]:
         self.cap = cv2.VideoCapture(self.camera_id)
 
         if not self.cap.isOpened():
@@ -81,6 +81,8 @@ class CardScanner:
         print("Escáner iniciado. Controles:")
         print("  's' - Guardar carta detectada")
         print("  'q' - Salir del escáner")
+
+        saved_path = None
 
         while True:
             ret, frame = self.cap.read()
@@ -95,11 +97,12 @@ class CardScanner:
             tecla = cv2.waitKey(1) & 0xFF
 
             if tecla == ord('s'):
-                self.save_detected_card()
+                saved_path = self.save_detected_card()
             elif tecla == ord('q'):
                 break
 
         self.stop_scanning()
+        return saved_path
 
     def stop_scanning(self):
         if self.cap:
@@ -118,8 +121,7 @@ def scan_card() -> Optional[str]:
         Ruta del archivo guardado si la carta fue capturada, None en caso contrario.
     """
     scanner = CardScanner()
-    scanner.start_scanning()
-    return None
+    return scanner.start_scanning()
 
 
 if __name__ == "__main__":

@@ -7,8 +7,9 @@ from random import randint
 import threading
 
 from src.model.consumer import AIConsumer
-from src.scanner.escaner_cartas import CardScanner
+from src.scanner.escaner_cartas import scan_card
 from pathlib import Path
+import cv2
 
 assets_path = Path(__file__).parent / "assets"
 
@@ -95,29 +96,12 @@ class MainWindow(tk.Tk):
     def start_card_scanner(self):
         """Inicia el escáner de cartas en un thread separado."""
         def run_scanner():
-            scanner = CardScanner()
-            scanner.start_scanning()
-            if scanner.get_last_card() is not None:
-                card_image = scanner.get_last_card()
-                self.show_card_from_scanner(card_image)
+            card_path = scan_card()
+            if card_path:
+                self.show_image_preview(card_path)
 
         thread = threading.Thread(target=run_scanner, daemon=True)
         thread.start()
-
-    def show_card_from_scanner(self, card_image):
-        """Muestra la carta escaneada en el preview."""
-        try:
-            from PIL import Image
-            import cv2
-
-            rgb_image = cv2.cvtColor(card_image, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(rgb_image)
-            img.thumbnail((150, 200), Image.Resampling.LANCZOS)
-            preview_photo = ImageTk.PhotoImage(img)
-            self.preview_label.config(image=preview_photo, text="")
-            self.preview_label.image = preview_photo
-        except Exception as e:
-            self.preview_label.config(text=f"Error: {str(e)}")
 
     def show_image_preview(self, image_path):
         if not image_path:
