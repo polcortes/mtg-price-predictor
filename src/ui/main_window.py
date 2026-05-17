@@ -11,6 +11,9 @@ from src.scanner.escaner_cartas import scan_card
 from src.ocr.ocr_service import OCRService
 from pathlib import Path
 import cv2
+import io
+import matplotlib.pyplot as plt
+from datetime import datetime
 
 assets_path = Path(__file__).parent / "assets"
 
@@ -77,13 +80,9 @@ class MainWindow(tk.Tk):
         self.entry_nombre = ttk.Entry(self.right_frame)
         self.entry_nombre.grid(row=0, column=1, sticky="ew", pady=5, padx=5)
 
-        ttk.Label(self.right_frame, text="Colección:").grid(row=1, column=0, sticky="w", pady=5)
+        ttk.Label(self.right_frame, text="Set:").grid(row=1, column=0, sticky="w", pady=5)
         self.entry_coleccion = ttk.Entry(self.right_frame)
         self.entry_coleccion.grid(row=1, column=1, sticky="ew", pady=5, padx=5)
-
-        ttk.Label(self.right_frame, text="Estado:").grid(row=2, column=0, sticky="w", pady=5)
-        self.entry_estado = ttk.Entry(self.right_frame)
-        self.entry_estado.grid(row=2, column=1, sticky="ew", pady=5, padx=5)
 
         self.submit_btn = ttk.Button(self.right_frame, text="Predecir Precio")
         self.submit_btn.grid(row=3, column=1, sticky="e", pady=15)
@@ -95,13 +94,12 @@ class MainWindow(tk.Tk):
 
     def start_card_scanner(self):
         """Inicia el escáner de cartas en un thread separado."""
-        def run_scanner():
-            card_path = scan_card()
+        def scan_callback(card_path: str):
             if card_path:
                 self.show_image_preview(card_path)
+                self.extract_card_from_image(card_path)
 
-        thread = threading.Thread(target=run_scanner, daemon=True)
-        thread.start()
+        scan_card(master=self, callback=lambda path: scan_callback(path))
     def on_image_selected(self):
         image_path = askopenfilename(title="Selecciona una imagen", filetypes=[("Image files", "*.jpg *.jpeg *.png")])
         if not image_path:
@@ -125,17 +123,28 @@ class MainWindow(tk.Tk):
     def extract_card_from_image(self, image_path):
         """Extrae nombre de carta desde imagen usando OCR."""
         try:
-            result = self.ocr_service.extract_card_name(image_path)
+            # result = self.ocr_service.extract_card_name(image_path)
+            from src.ocr.with_ai import process_mtg_card
+            result = process_mtg_card(image_path)
+
+            print(result)
 
             if result:
-                card_name = result.get("ocr_name")
-                candidates = result.get("ocr_candidates", [])
+                card_name = result.get("validated_data", {}).get("card_name")
+                set_name = result.get("validated_data", {}).get("set_name")
 
                 self.entry_nombre.delete(0, tk.END)
-                self.entry_nombre.insert(0, card_name)
+                self.entry_nombre.insert(0, card_name or "")
+
+                self.entry_coleccion.delete(0, tk.END)
+                self.entry_coleccion.insert(0, set_name or "")
+
+                self.selected_card_name = card_name
+                self.selected_set_name = set_name
+                self.selected_card_uuid = result.get("card_uuid")
 
                 self.result_label.config(
-                    text=f"OCR: {card_name}\nCandidatos: {', '.join(candidates[:2])}",
+                    text=f"OCR: {card_name}\nCandidatos: {set_name}",
                     foreground="#0066cc"
                 )
             else:
@@ -146,24 +155,20 @@ class MainWindow(tk.Tk):
 
     def predict_price(self):
         """Obtiene carta aleatoria y predice su precio."""
+        self.result_label.config(image="")
         try:
-            count = self.collection.count_documents({})
-            if count == 0:
-                self.result_label.config(text="Error: No hay cartas en la BD", foreground="red")
+            if not hasattr(self, 'selected_card_uuid') or not self.selected_card_uuid:
+                self.result_label.config(text="Error: Primero debes escanear o subir una carta válida.", foreground="red")
                 return
-                
-            random_card = self.collection.find().limit(-1).skip(randint(0, count - 1)).next()
-            self.current_card = random_card.get('name', 'Desconocida')
-            
-            # Actualizar UI con datos de la carta
-            self.entry_nombre.delete(0, tk.END)
-            self.entry_nombre.insert(0, self.current_card)
-            
-            self.entry_coleccion.delete(0, tk.END)
-            self.entry_coleccion.insert(0, random_card.get('set', 'Desconocida'))
-            
+
             # Obtener mapa de precios
-            prices_map = random_card.get('datePriceMap', {})
+            try:
+                card = self.collection.find({"cardId": self.selected_card_uuid}).limit(1).next()
+            except StopIteration:
+                self.result_label.config(text="Error: No hay historial de precios para esta carta específica.", foreground="red")
+                return
+
+            prices_map = card.get('datePriceMap', {})
             
             if not prices_map:
                 self.result_label.config(text="Error: Carta sin historial de precios", foreground="red")
@@ -171,6 +176,8 @@ class MainWindow(tk.Tk):
                 
             # Hacer predicción
             probability = self.consumer.predict(prices_map)
+
+            print(f"Probability: {probability * 100}%")
             
             if probability is None:
                 self.result_label.config(text=f"Error: Se necesitan {self.consumer.days_back} días de datos", foreground="red")
@@ -189,11 +196,41 @@ class MainWindow(tk.Tk):
                 trend = "BAJADA 📉"
                 
             result_text = f"Probabilidad de subida: {percentage:.1f}%\nTendencia: {trend}"
-            self.result_label.config(text=result_text, foreground=color)
+
+            # Generar gráfica con pyplot
+            fig, ax = plt.subplots(figsize=(4, 2.5))
+            dates = sorted(prices_map.keys())
+            try:
+                date_objects = [datetime.strptime(d, "%Y-%m-%d") for d in dates]
+            except ValueError:
+                date_objects = dates
+            prices = [prices_map[d] for d in dates]
+            
+            ax.plot(date_objects, prices, color=color, linewidth=2)
+            ax.set_title("Evolución del Precio", fontsize=10)
+            ax.set_ylabel("€", fontsize=9)
+            ax.tick_params(axis='x', rotation=45, labelsize=8)
+            ax.tick_params(axis='y', labelsize=8)
+            plt.tight_layout()
+
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', dpi=100)
+            buf.seek(0)
+            plt.close(fig)
+
+            img = Image.open(buf)
+            self.graph_photo = ImageTk.PhotoImage(img)
+
+            self.result_label.config(
+                text=result_text, 
+                image=self.graph_photo, 
+                compound=tk.TOP,
+                foreground=color
+            )
             
             # Actualizar título del frame derecho
-            self.right_frame.config(text=f"Datos de {self.current_card}")
+            self.right_frame.config(text=f"Datos de {getattr(self, 'selected_card_name', 'la carta')}")
             
         except Exception as e:
-            self.result_label.config(text=f"Error: {str(e)}", foreground="red")
+            self.result_label.config(text=f"Error: {str(e)}", image="", foreground="red")
             print(f"Error completo: {e}")

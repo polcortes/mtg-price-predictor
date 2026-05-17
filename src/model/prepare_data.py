@@ -2,6 +2,7 @@ from pymongo import MongoClient
 from tqdm import tqdm
 from datetime import datetime
 import json
+from pathlib import Path
 
 
 DB_NAME = "mtg_data"
@@ -16,7 +17,10 @@ collection = db[COLLECTION_NAME]
 print("✅")
 print("Retrieving the new data...", end=" ")
 
-with open('./AllPrices.json', mode='rb') as file:
+datasets_path = Path(__file__).parent.parent / "datasets"
+
+
+with open(datasets_path / 'AllPrices.json', mode='rb') as file:
     data = list(json.load(file)['data'].items())
     
     print("✅")
@@ -34,6 +38,9 @@ with open('./AllPrices.json', mode='rb') as file:
                     
                     if not "paper" in values: 
                         continue
+
+                    if not "cardmarket" in values["paper"]:
+                         continue
                     
                     retail = values['paper']['cardmarket']['retail']
 
@@ -44,5 +51,6 @@ with open('./AllPrices.json', mode='rb') as file:
                     if "normal" in retail:
                         normal_items = values['paper']['cardmarket']['retail']['normal']
                         collection.insert_one({"cardId": card_id, "isFoil": False, "datePriceMap": normal_items})
-        except Exception:
+        except Exception as ex:
             print("An error has occurred, rolling back the changes...")
+            print(ex)
