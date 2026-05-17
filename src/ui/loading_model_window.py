@@ -28,8 +28,9 @@ class LoadingModelWindow(tk.Tk):
         
         label_subtitle = ttk.Label(
             container, 
-            text="Por favor, no cierre el programa. Esto puede tomar unos minutos.", 
-            font=("Helvetica", 10)
+            text="Por favor, no cierre el programa.\nEsto puede tomar unos minutos.", 
+            font=("Helvetica", 10),
+            justify="center"
         )
         label_subtitle.pack(pady=(0, 15))
         

@@ -95,13 +95,12 @@ class MainWindow(tk.Tk):
 
     def start_card_scanner(self):
         """Inicia el escáner de cartas en un thread separado."""
-        def run_scanner():
-            card_path = scan_card()
+        def scan_callback(card_path: str):
             if card_path:
                 self.show_image_preview(card_path)
+                self.extract_card_from_image(card_path)
 
-        thread = threading.Thread(target=run_scanner, daemon=True)
-        thread.start()
+        scan_card(master=self, callback=lambda path: scan_callback(path))
     def on_image_selected(self):
         image_path = askopenfilename(title="Selecciona una imagen", filetypes=[("Image files", "*.jpg *.jpeg *.png")])
         if not image_path:

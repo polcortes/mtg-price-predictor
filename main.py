@@ -4,9 +4,9 @@ from pathlib import Path
 
 def main():
     base_path = Path(__file__).parent
-    model_path = base_path / "model" / "model.keras"
-    scaler_path = base_path / "model" / "scaler.pkl"
-    config_path = base_path / "model" / "config.pkl"
+    model_path = base_path / "src" / "model" / "model.keras"
+    scaler_path = base_path / "src" / "model" / "scaler.pkl"
+    config_path = base_path / "src" / "model" / "config.pkl"
     
     if not model_path.exists() or not scaler_path.exists() or not config_path.exists():
         from src.ui.loading_model_window import LoadingModelWindow
